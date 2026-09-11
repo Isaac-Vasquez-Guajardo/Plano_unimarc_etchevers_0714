@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Turno · Plano Inventario 0714</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Paleta Unimarc: rojo corporativo + amarillo/dorado de acento, sobre base clara */
+    --bg:#F4F5F6;
+    --panel:#FFFFFF;
+    --panel-2:#F1F2F4;
+    --line:#E3E5E8;
+    --ink:#1B1D1F;
+    --ink-dim:#71767C;
+
+    --uni-red:#D91E36;
+    --uni-red-dark:#A9152A;
+    --uni-gold:#F5B300;
+    --uni-gold-dark:#B98600;
+
+    /* Estados: pendiente=rojo, parcial=dorado, completado=verde */
+    --amber:#D91E36;        /* pendiente */
+    --amber-dim:#FCE8EA;
+    --blue:#B9860A;         /* parcial */
+    --blue-dim:#FCF1D6;
+    --teal:#1E9E5A;         /* completado */
+    --teal-dim:#E4F6EA;
+    --red:#D91E36;          /* acciones destructivas */
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-track{background:var(--panel);}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+
+  /* Wordmark del local */
+  .uni-logo{
+    display:flex;align-items:center;gap:10px;
+  }
+  .uni-mark{
+    width:40px;height:40px;border-radius:10px;
+    background:linear-gradient(155deg, var(--uni-red) 0%, var(--uni-red-dark) 100%);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+    box-shadow:0 2px 8px rgba(217,30,54,0.28);
+    position:relative;
+  }
+  .uni-mark svg{width:22px;height:22px;}
+  .uni-mark::after{
+    content:"";position:absolute;right:-3px;bottom:-3px;width:12px;height:12px;
+    border-radius:50%;background:var(--uni-gold);border:2px solid var(--panel);
+  }
+  .uni-wordmark{
+    font-weight:800;font-size:19px;letter-spacing:-0.01em;line-height:1;
+    color:var(--uni-red);
+  }
+  .uni-wordmark span{color:var(--ink);font-weight:800;}
+
+  .blueprint{
+    background-color:var(--panel);
+    background-image:
+      linear-gradient(rgba(217,30,54,0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(217,30,54,0.045) 1px, transparent 1px);
+    background-size:24px 24px;
+    border:1px solid var(--line);
+  }
+
+  .patente-pin{
+    position:absolute;
+    transform:translate(-50%,-50%);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;
+    border-radius:5px;
+    cursor:pointer;
+    transition:transform .12s ease, box-shadow .12s ease, filter .12s ease;
+    border:1px solid transparent;
+    white-space:nowrap;
+    line-height:1;
+    user-select:none;
+  }
+  .patente-pin:hover{transform:translate(-50%,-50%) scale(1.2);z-index:30;box-shadow:0 2px 10px rgba(27,29,31,0.22);}
+  .patente-pin.dimmed{opacity:.18;filter:grayscale(45%);}
+  .patente-pin.dimmed:hover{opacity:.7;}
+
+  .st-pendiente{background:var(--amber-dim);color:var(--uni-red-dark);border-color:#F3C3CA;}
+  .st-parcial{background:var(--blue-dim);color:var(--uni-gold-dark);border-color:#EFD68C;}
+  .st-completado{background:var(--teal-dim);color:#177A45;border-color:#B7E6C6;}
+
+  .zone-label{
+    position:absolute;
+    transform:translate(-50%,-50%);
+    color:var(--ink-dim);
+    font-size:9px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    font-weight:700;
+    pointer-events:none;
+    white-space:nowrap;
+    text-shadow:0 0 5px var(--panel), 0 0 5px var(--panel), 0 0 5px var(--panel);
+  }
+
+  .tab-btn{
+    border-bottom:2px solid transparent;
+    color:var(--ink-dim);
+    transition:color .15s, border-color .15s;
+  }
+  .tab-btn.active{color:var(--uni-red);border-color:var(--uni-red);}
+
+  .pill{
+    border:1px solid var(--line);
+    color:var(--ink-dim);
+    background:var(--panel);
+    transition:background .15s, color .15s, border-color .15s;
+  }
+  .pill.active{background:var(--uni-red);color:#fff;border-color:var(--uni-red);}
+
+  .progress-ring circle{transition:stroke-dashoffset .5s ease;}
+
+  .row-item{
+    border-bottom:1px solid var(--line);
+    cursor:pointer;
+    transition:background .12s;
+  }
+  .row-item:hover{background:var(--panel-2);}
+
+  .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .dot-pendiente{background:var(--uni-red);}
+  .dot-parcial{background:var(--uni-gold-dark);}
+  .dot-completado{background:var(--teal);}
+
+  .modal-backdrop{
+    background:rgba(20,10,10,0.55);
+    backdrop-filter:blur(2px);
+  }
+  .modal-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    box-shadow:0 20px 50px rgba(20,10,10,0.25);
+  }
+
+  input[type="checkbox"].task-check{
+    appearance:none;width:20px;height:20px;border-radius:5px;
+    border:1.5px solid var(--line);background:var(--panel-2);
+    cursor:pointer;position:relative;flex-shrink:0;
+    transition:background .15s, border-color .15s;
+  }
+  input[type="checkbox"].task-check:checked{background:var(--teal);border-color:var(--teal);}
+  input[type="checkbox"].task-check:checked::after{
+    content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg);
+  }
+
+  .text-input{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+  }
+  .text-input:focus{outline:none;border-color:var(--uni-red);}
+
+  .btn-save{background:var(--uni-red);}
+  .btn-save:hover{background:var(--uni-red-dark);}
+
+  .fade-in{animation:fadeIn .15s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  @media (max-width: 900px){
+    .layout-grid{grid-template-columns:1fr;}
+    .map-wrap{height:60vh;}
+  }
+</style>
+</head>
+<body class="min-h-screen">
+
+<div id="app" class="max-w-[1400px] mx-auto px-4 md:px-6 py-5">
+
+  <!-- HEADER -->
+  <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+    <div class="flex items-center gap-4">
+      <div class="uni-logo">
+        <div class="uni-mark">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 8L5.2 8L6.7 17.4C6.85 18.36 7.68 19.06 8.65 19.06H17.5C18.4 19.06 19.2 18.44 19.42 17.56L21 11H7.2"
+              stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="9.5" cy="21.5" r="1.15" fill="white"/>
+            <circle cx="17" cy="21.5" r="1.15" fill="white"/>
+          </svg>
+        </div>
+        <div class="uni-wordmark">uni<span>marc</span></div>
+      </div>
+      <div class="hidden sm:block w-px h-9 bg-[var(--line)]"></div>
+      <div class="hidden sm:block">
+        <div class="text-[11px] tracking-[0.1em] text-[var(--ink-dim)] uppercase mono mb-0.5">Local 0714 · Sucursal Etchevers</div>
+        <h1 class="text-lg font-800 leading-tight">Control de Turno — Inventario</h1>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-3 bg-[var(--panel)] border border-[var(--line)] rounded-xl px-4 py-3">
+        <svg width="46" height="46" viewBox="0 0 46 46" class="progress-ring -rotate-90">
+          <circle cx="23" cy="23" r="19" stroke="var(--line)" stroke-width="5" fill="none"/>
+          <circle id="ringProgress" cx="23" cy="23" r="19" stroke="var(--teal)" stroke-width="5" fill="none"
+            stroke-linecap="round" stroke-dasharray="119.4" stroke-dashoffset="119.4"/>
+        </svg>
+        <div>
+          <div id="progressPct" class="text-lg font-700 mono leading-none">0%</div>
+          <div class="text-[11px] text-[var(--ink-dim)] mt-1">Turno completado</div>
+        </div>
+      </div>
+      <div class="hidden md:flex flex-col gap-1 text-[12px] mono">
+        <div class="flex items-center gap-2"><span class="dot dot-pendiente"></span><span id="cntPendiente" class="text-[var(--ink-dim)]">0 pendientes</span></div>
+        <div class="flex items-center gap-2"><span class="dot dot-parcial"></span><span id="cntParcial" class="text-[var(--ink-dim)]">0 parciales</span></div>
+        <div class="flex items-center gap-2"><span class="dot dot-completado"></span><span id="cntCompletado" class="text-[var(--ink-dim)]">0 completadas</span></div>
+      </div>
+    </div>
+  </header>
+  <div class="text-sm text-[var(--ink-dim)] -mt-4 mb-5 sm:hidden">Revisión de fechas y cambio de flejes por patente</div>
+
+  <!-- FILTER BAR -->
+  <div class="flex flex-wrap items-center gap-2 mb-4">
+    <div class="flex gap-1 bg-[var(--panel)] border border-[var(--line)] rounded-lg p-1" id="statusFilters">
+      <button data-status="todos" class="pill active px-3 py-1.5 rounded-md text-[12px] font-medium">Todos</button>
+      <button data-status="pendiente" class="pill px-3 py-1.5 rounded-md text-[12px] font-medium">Pendiente</button>
+      <button data-status="parcial" class="pill px-3 py-1.5 rounded-md text-[12px] font-medium">Parcial</button>
+      <button data-status="completado" class="pill px-3 py-1.5 rounded-md text-[12px] font-medium">Completado</button>
+    </div>
+
+    <div class="relative ml-auto w-full sm:w-64">
+      <input id="searchBox" type="text" placeholder="Buscar patente o sector..."
+        class="text-input w-full rounded-lg px-3 py-2 text-[13px]" />
+    </div>
+  </div>
+
+  <!-- AREA TABS -->
+  <div class="flex items-center gap-6 border-b border-[var(--line)] mb-4">
+    <button data-area="sala" class="tab-btn active pb-2.5 text-[13px] font-600">Sala de Ventas <span class="text-[var(--ink-dim)] font-400">· Área 1</span></button>
+    <button data-area="camaras" class="tab-btn pb-2.5 text-[13px] font-600">Cámaras <span class="text-[var(--ink-dim)] font-400">· Área 20</span></button>
+    <button data-area="bodega" class="tab-btn pb-2.5 text-[13px] font-600">Bodega <span class="text-[var(--ink-dim)] font-400">· Área 20</span></button>
+  </div>
+
+  <!-- MAIN LAYOUT -->
+  <div class="layout-grid grid gap-4" style="grid-template-columns: 1fr 380px;">
+
+    <!-- MAP -->
+    <div class="blueprint rounded-xl relative overflow-hidden map-wrap" style="height:72vh;">
+      <div class="absolute top-3 left-3 z-20 text-[10px] tracking-[0.1em] uppercase mono text-[var(--ink-dim)] bg-[var(--panel)]/80 px-2 py-1 rounded border border-[var(--line)]" id="mapAreaLabel">
+        Plano · Sala de Ventas
+      </div>
+      <div class="absolute top-3 right-3 z-20 flex items-center gap-3 text-[10px] mono text-[var(--ink-dim)] bg-[var(--panel)]/80 px-2 py-1 rounded border border-[var(--line)]">
+        <span class="flex items-center gap-1"><span class="dot dot-pendiente"></span>Pend.</span>
+        <span class="flex items-center gap-1"><span class="dot dot-parcial"></span>Parc.</span>
+        <span class="flex items-center gap-1"><span class="dot dot-completado"></span>Comp.</span>
+      </div>
+      <div id="mapCanvas" class="absolute inset-0"></div>
+    </div>
+
+    <!-- LIST -->
+    <div class="bg-[var(--panel)] border border-[var(--line)] rounded-xl flex flex-col overflow-hidden" style="height:72vh;">
+      <div class="px-4 py-3 border-b border-[var(--line)] flex items-center justify-between">
+        <span class="text-[12px] font-700 uppercase tracking-[0.08em] text-[var(--ink-dim)]">Patentes</span>
+        <span id="listCount" class="text-[12px] mono text-[var(--ink-dim)]">0</span>
+      </div>
+      <div id="listBody" class="overflow-y-auto flex-1"></div>
+    </div>
+  </div>
+
+  <footer class="text-center text-[11px] text-[var(--ink-dim)] mt-6 pb-4">
+    Datos cargados desde <span class="mono">Plano_Inventario.xlsx</span> — hoja CORELATIVO PATENTES · Estado guardado localmente en este dispositivo
+  </footer>
+</div>
+
+<!-- MODAL -->
+<div id="modalBackdrop" class="fixed inset-0 modal-backdrop z-50 hidden items-center justify-center p-4">
+  <div class="modal-card fade-in rounded-2xl w-full max-w-md overflow-hidden">
+    <div class="px-5 py-4 border-b border-[var(--line)] flex items-start justify-between">
+      <div>
+        <div class="text-[11px] uppercase tracking-[0.1em] text-[var(--ink-dim)] mono" id="modalSector">Sector</div>
+        <div class="text-xl font-800 mono mt-0.5">Patente #<span id="modalPatente">—</span></div>
+      </div>
+      <button id="modalClose" class="text-[var(--ink-dim)] hover:text-[var(--ink)] text-xl leading-none px-1">✕</button>
+    </div>
+
+    <div class="px-5 py-4 space-y-4">
+      <div class="text-[13px] text-[var(--ink-dim)] leading-relaxed" id="modalDetalle">—</div>
+
+      <div class="space-y-2.5">
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="chkFechas" class="task-check">
+          <span class="text-[14px]">Revisión de Fechas realizada</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="chkFlejes" class="task-check">
+          <span class="text-[14px]">Cambio de Flejes realizado</span>
+        </label>
+      </div>
+
+      <div>
+        <label class="text-[11px] uppercase tracking-[0.08em] text-[var(--ink-dim)] mb-1.5 block">Responsable / Turno</label>
+        <input id="inpResponsable" type="text" placeholder="Nombre del jefe de turno"
+          class="text-input w-full rounded-lg px-3 py-2 text-[14px]">
+      </div>
+
+      <div id="modalMeta" class="text-[11px] text-[var(--ink-dim)] mono pt-1 border-t border-[var(--line)]"></div>
+    </div>
+
+    <div class="px-5 py-4 border-t border-[var(--line)] flex items-center gap-2">
+      <button id="modalSave" class="btn-save flex-1 text-white font-700 text-[13px] rounded-lg py-2.5 transition">
+        Guardar registro
+      </button>
+      <button id="modalReset" class="px-3 py-2.5 rounded-lg border border-[var(--line)] text-[var(--ink-dim)] text-[13px] hover:text-[var(--red)] hover:border-[var(--red)] transition">
+        Reiniciar
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   DATOS REALES EXTRAÍDOS DE Plano_Inventario.xlsx
+   Hojas: CORELATIVO PATENTES, DETALLE PATENTES, SALA, CAMARAS, BODEGA
+   ========================================================= */
+const RAW_DATA = {"patentes": [{"patente": "1", "area": "1", "comentario": "Servicio al cliente", "producto": "Productos Sensibles", "tipo": "1", "sector": "Servicio al Cliente", "pos": {"sheet": "sala", "r": 65, "c": 87}}, {"patente": "2", "area": "1", "comentario": "Servicio al cliente", "producto": "Productos Sensibles", "tipo": "1", "sector": "Servicio al Cliente", "pos": {"sheet": "sala", "r": 65, "c": 84}}, {"patente": "3", "area": "1", "comentario": "Frente cajas", "producto": "self check out", "tipo": "1", "sector": "Pre-cajas", "pos": {"sheet": "sala", "r": 61, "c": 72}}, {"patente": "4", "area": "1", "comentario": "Frente cajas", "producto": "self check out", "tipo": "1", "sector": "Pre-cajas", "pos": {"sheet": "sala", "r": 61, "c": 66}}, {"patente": "5", "area": "1", "comentario": "Frente cajas", "producto": "self check out", "tipo": "1", "sector": "Pre-cajas", "pos": {"sheet": "sala", "r": 61, "c": 60}}, {"patente": "6", "area": "1", "comentario": "Frente cajas", "producto": "Pre-cajas", "tipo": "1", "sector": "Pre-cajas", "pos": {"sheet": "sala", "r": 61, "c": 53}}, {"patente": "7", "area": "1", "comentario": "Frente cajas", "producto": "Pre-cajas", "tipo": "1", "sector": "Pre-cajas", "pos": {"sheet": "sala", "r": 61, "c": 47}}, {"patente": "8", "area": "1", "comentario": "Frente cajas", "producto": "Pre-cajas", "tipo": "1", "sector": "Pre-cajas", "pos": {"sheet": "sala", "r": 61, "c": 41}}, {"patente": "9", "area": "1", "comentario": "Frente cajas", "producto": "Pre-cajas", "tipo": "1", "sector": "Pre-cajas", "pos": {"sheet": "sala", "r": 61, "c": 36}}, {"patente": "10", "area": "1", "comentario": "Exhibicion", "producto": "exhibicion adicional", "tipo": "1", "sector": "Pre-cajas", "pos": {"sheet": "sala", "r": 61, "c": 24}}, {"patente": "11", "area": "1", "comentario": "Exhibicion", "producto": "exhibicion adicional", "tipo": "1", "sector": "Pre-cajas", "pos": {"sheet": "sala", "r": 65, "c": 24}}, {"patente": "12", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Frutas y verduras", "pos": {"sheet": "sala", "r": 67, "c": 24}}, {"patente": "13", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Frutas y verduras", "pos": {"sheet": "sala", "r": 59, "c": 22}}, {"patente": "14", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Frutas y verduras", "pos": {"sheet": "sala", "r": 67, "c": 7}}, {"patente": "15", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Frutas y verduras", "pos": {"sheet": "sala", "r": 67, "c": 4}}, {"patente": "16", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Frutas y verduras", "pos": {"sheet": "sala", "r": 67, "c": 1}}, {"patente": "17", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Frutas y verduras", "pos": {"sheet": "sala", "r": 65, "c": 1}}, {"patente": "18", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 53, "c": 20}}, {"patente": "19", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 53, "c": 30}}, {"patente": "20", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 53, "c": 41}}, {"patente": "21", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 53, "c": 52}}, {"patente": "22", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 53, "c": 63}}, {"patente": "23", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 54, "c": 76}}, {"patente": "24", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 36, "c": 76}}, {"patente": "25", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 18, "c": 80}}, {"patente": "26", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 10, "c": 80}}, {"patente": "27", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 18, "c": 71}}, {"patente": "28", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 10, "c": 71}}, {"patente": "29", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 28, "c": 63}}, {"patente": "30", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 30, "c": 41}}, {"patente": "31", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 30, "c": 30}}, {"patente": "32", "area": "1", "comentario": "Exhibicion", "producto": "Cabeceras", "tipo": "1", "sector": "Cabeceras", "pos": {"sheet": "sala", "r": 30, "c": 20}}, {"patente": "33", "area": "1", "comentario": "Mural FFVV", "producto": "FFVV", "tipo": "1", "sector": "Mural FFyVV", "pos": {"sheet": "sala", "r": 53, "c": 3}}, {"patente": "34", "area": "1", "comentario": "Mural FFVV", "producto": "FFVV", "tipo": "1", "sector": "Mural FFyVV", "pos": {"sheet": "sala", "r": 51, "c": 3}}, {"patente": "35", "area": "1", "comentario": "Mural FFVV", "producto": "FFVV", "tipo": "1", "sector": "Mural FFyVV", "pos": {"sheet": "sala", "r": 49, "c": 3}}, {"patente": "36", "area": "1", "comentario": "Mural FFVV", "producto": "FFVV", "tipo": "1", "sector": "Mural FFyVV", "pos": {"sheet": "sala", "r": 47, "c": 3}}, {"patente": "37", "area": "1", "comentario": "Mural FFVV", "producto": "FFVV", "tipo": "1", "sector": "Mural FFyVV", "pos": {"sheet": "sala", "r": 45, "c": 3}}, {"patente": "38", "area": "1", "comentario": "Exhibicion", "producto": "carbon", "tipo": "1", "sector": "Camillas FFVV", "pos": {"sheet": "sala", "r": 43, "c": 3}}, {"patente": "39", "area": "1", "comentario": "Exhibicion", "producto": "carbon", "tipo": "1", "sector": "Camillas FFVV", "pos": {"sheet": "sala", "r": 41, "c": 3}}, {"patente": "40", "area": "1", "comentario": "Exhibicion", "producto": "carbon", "tipo": "1", "sector": "Camillas FFVV", "pos": {"sheet": "sala", "r": 39, "c": 3}}, {"patente": "41", "area": "1", "comentario": "Exhibicion", "producto": "parrillas", "tipo": "1", "sector": "Camillas FFVV", "pos": {"sheet": "sala", "r": 37, "c": 3}}, {"patente": "42", "area": "1", "comentario": "FFVV", "producto": "frutos secos", "tipo": "1", "sector": "Camillas FFVV", "pos": {"sheet": "sala", "r": 35, "c": 3}}, {"patente": "43", "area": "1", "comentario": "Gondolas", "producto": "Productos naturales", "tipo": "1", "sector": "Camillas FFVV", "pos": {"sheet": "sala", "r": 33, "c": 3}}, {"patente": "44", "area": "1", "comentario": "Gondolas", "producto": "Pure-Legumbres", "tipo": "1", "sector": "Camillas FFVV", "pos": {"sheet": "sala", "r": 31, "c": 3}}, {"patente": "45", "area": "1", "comentario": "Gondolas", "producto": "arroz", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 29, "c": 3}}, {"patente": "46", "area": "1", "comentario": "Gondolas", "producto": "arroz", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 27, "c": 3}}, {"patente": "47", "area": "1", "comentario": "Gondolas", "producto": "concervas de pescados", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 25, "c": 3}}, {"patente": "48", "area": "1", "comentario": "Gondolas", "producto": "concervas de pescados", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 23, "c": 3}}, {"patente": "49", "area": "1", "comentario": "Gondolas", "producto": "concervas de mariscos", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 21, "c": 3}}, {"patente": "50", "area": "1", "comentario": "Gondolas", "producto": "concervas de verduras", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 18, "c": 6}}, {"patente": "51", "area": "1", "comentario": "Gondolas", "producto": "concervas de fruta", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 18, "c": 9}}, {"patente": "52", "area": "1", "comentario": "Gondolas", "producto": "queso rallado -salsas", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 18, "c": 19}}, {"patente": "53", "area": "1", "comentario": "Gondolas", "producto": "queso rallado -salsas", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 18, "c": 22}}, {"patente": "54", "area": "1", "comentario": "Gondolas", "producto": "Harinas", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 18, "c": 23}}, {"patente": "55", "area": "1", "comentario": "Gondolas", "producto": "reposteria", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 18, "c": 26}}, {"patente": "56", "area": "1", "comentario": "Gondolas", "producto": "huevos", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 18, "c": 29}}, {"patente": "57", "area": "1", "comentario": "Gondolas", "producto": "huevos", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 15, "c": 29}}, {"patente": "58", "area": "1", "comentario": "Gondolas", "producto": "huevos", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 13, "c": 29}}, {"patente": "59", "area": "1", "comentario": "trastienda", "producto": "dely", "tipo": "1", "sector": "Abarrotes", "pos": {"sheet": "sala", "r": 16, "c": 22}}, {"patente": "60", "area": "1", "comentario": "panaderia", "producto": "Pan Granel", "tipo": "1", "sector": "Panaderia - Pasteleria", "pos": {"sheet": "sala", "r": 15, "c": 37}}, {"patente": "61", "area": "1", "comentario": "panaderia", "producto": "Pan Granel", "tipo": "1", "sector": "Panaderia - Pasteleria", "pos": {"sheet": "sala", "r": 15, "c": 43}}, {"patente": "62", "area": "1", "comentario": "Panaderia", "producto": "Pan Granel", "tipo": "1", "sector": "Panaderia - Pasteleria", "pos": {"sheet": "sala", "r": 15, "c": 46}}, {"patente": "63", "area": "1", "comentario": "Gondolas", "producto": "pollo asado", "tipo": "1", "sector": "Panaderia - Pasteleria", "pos": {"sheet": "sala", "r": 13, "c": 49}}, {"patente": "64", "area": "1", "comentario": "Gondolas", "producto": "dely", "tipo": "1", "sector": "Panaderia - Pasteleria", "pos": {"sheet": "sala", "r": 13, "c": 54}}, {"patente": "65", "area": "1", "comentario": "Gondolas", "producto": "pasteleria envasada", "tipo": "1", "sector": "Panaderia - Pasteleria", "pos": {"sheet": "sala", "r": 14, "c": 59}}, {"patente": "66", "area": "1", "comentario": "Gondolas", "producto": "pasteleria envasada", "tipo": "1", "sector": "Panaderia - Pasteleria", "pos": {"sheet": "sala", "r": 11, "c": 59}}, {"patente": "67", "area": "1", "comentario": "Mural Tortas", "producto": "tortas", "tipo": "1", "sector": "Panaderia - Pasteleria", "pos": {"sheet": "sala", "r": 8, "c": 59}}, {"patente": "68", "area": "1", "comentario": "mural dely", "producto": "dely", "tipo": "1", "sector": "Panaderia - Pasteleria", "pos": {"sheet": "sala", "r": 5, "c": 59}}, {"patente": "69", "area": "1", "comentario": "mural de Lacteos", "producto": "Lacteos", "tipo": "1", "sector": "Panaderia - Pasteleria", "pos": {"sheet": "sala", "r": 3, "c": 67}}, {"patente": "70", "area": "1", "comentario": "mural de Lacteos", "producto": "Lacteos", "tipo": "1", "sector": "Panaderia - Pasteleria", "pos": {"sheet": "sala", "r": 3, "c": 69}}, {"patente": "71", "area": "1", "comentario": "mural de Lacteos", "producto": "Lacteos", "tipo": "1", "sector": "Panaderia - Pasteleria", "pos": {"sheet": "sala", "r": 3, "c": 71}}, {"patente": "72", "area": "1", "comentario": "mural de Lacteos", "producto": "Lacteos", "tipo": "1", "sector": "Panaderia - Pasteleria", "pos": {"sheet": "sala", "r": 2, "c": 59}}, {"patente": "73", "area": "1", "comentario": "Mural de Lacteos", "producto": "Lacteos", "tipo": "1", "sector": "Lacteos", "pos": {"sheet": "sala", "r": 3, "c": 75}}, {"patente": "74", "area": "1", "comentario": "Mural de Lacteos", "producto": "Lacteos", "tipo": "1", "sector": "Lacteos", "pos": {"sheet": "sala", "r": 3, "c": 77}}, {"patente": "75", "area": "1", "comentario": "Mural de Lacteos", "producto": "Lacteos", "tipo": "1", "sector": "Lacteos", "pos": {"sheet": "sala", "r": 3, "c": 79}}, {"patente": "76", "area": "1", "comentario": "Mural de Lacteos", "producto": "Lacteos", "tipo": "1", "sector": "Lacteos", "pos": {"sheet": "sala", "r": 3, "c": 81}}, {"patente": "77", "area": "1", "comentario": "Mural de Lacteos", "producto": "Lacteos", "tipo": "1", "sector": "Lacteos", "pos": {"sheet": "sala", "r": 3, "c": 83}}, {"patente": "78", "area": "1", "comentario": "Mural de Lacteos", "producto": "Jugos Liquidos", "tipo": "1", "sector": "Lacteos", "pos": {"sheet": "sala", "r": 3, "c": 85}}, {"patente": "79", "area": "1", "comentario": "Mural de frio", "producto": "Margarinas y mantequillas", "tipo": "1", "sector": "Lacteos", "pos": {"sheet": "sala", "r": 5, "c": 88}}, {"patente": "80", "area": "1", "comentario": "Mural de frio", "producto": "Quesos", "tipo": "1", "sector": "Lacteos", "pos": {"sheet": "sala", "r": 7, "c": 88}}, {"patente": "81", "area": "1", "comentario": "Mural de frio", "producto": "Quesos", "tipo": "1", "sector": "Lacteos", "pos": {"sheet": "sala", "r": 9, "c": 88}}, {"patente": "82", "area": "1", "comentario": "Mural de frio", "producto": "Fiambreria envasada", "tipo": "1", "sector": "Lacteos", "pos": {"sheet": "sala", "r": 11, "c": 88}}, {"patente": "83", "area": "1", "comentario": "Mural de frio", "producto": "Fiambreria envasada", "tipo": "1", "sector": "Lacteos", "pos": {"sheet": "sala", "r": 13, "c": 88}}, {"patente": "84", "area": "1", "comentario": "Mural de frio", "producto": "Vienesas", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 15, "c": 88}}, {"patente": "85", "area": "1", "comentario": "Mural de frio", "producto": "Chorizos y longanizas", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 17, "c": 88}}, {"patente": "86", "area": "1", "comentario": "Mural de frio", "producto": "Carniceria", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 21, "c": 88}}, {"patente": "87", "area": "1", "comentario": "Mural de frio", "producto": "Carniceria", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 25, "c": 88}}, {"patente": "88", "area": "1", "comentario": "Mural de frio", "producto": "Carniceria", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 29, "c": 88}}, {"patente": "89", "area": "1", "comentario": "Mural de frio", "producto": "Carniceria", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 33, "c": 88}}, {"patente": "90", "area": "1", "comentario": "Mural de frio", "producto": "Carniceria", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 37, "c": 88}}, {"patente": "91", "area": "1", "comentario": "exhibicion", "producto": "exhibicion adicional", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 41, "c": 87}}, {"patente": "92", "area": "1", "comentario": "vitrina asistida", "producto": "carniceria", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 49, "c": 88}}, {"patente": "93", "area": "1", "comentario": "vitrina asistida", "producto": "Carniceria", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 51, "c": 88}}, {"patente": "94", "area": "1", "comentario": "vitrina asistida", "producto": "Carniceria", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 53, "c": 88}}, {"patente": "95", "area": "1", "comentario": "Vitrinas asistidas", "producto": "Fiambreria y quesos", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 57, "c": 88}}, {"patente": "96", "area": "1", "comentario": "Vitrinas asistidas", "producto": "Fiambreria y quesos", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 59, "c": 88}}, {"patente": "97", "area": "1", "comentario": "Vitrinas asistidas", "producto": "Fiambreria y quesos", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 61, "c": 88}}, {"patente": "98", "area": "1", "comentario": "exhibicion", "producto": "cooler PGC", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 63, "c": 84}}, {"patente": "99", "area": "1", "comentario": "exhibicion", "producto": "cooler PGC", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 63, "c": 80}}, {"patente": "100", "area": "1", "comentario": "Gondolas", "producto": "aceites", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 51, "c": 20}}, {"patente": "101", "area": "1", "comentario": "Gondolas", "producto": "aceites", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 49, "c": 20}}, {"patente": "102", "area": "1", "comentario": "Gondolas", "producto": "sal - sucedaneos", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 47, "c": 20}}, {"patente": "103", "area": "1", "comentario": "Gondolas", "producto": "culinario - condimentos", "tipo": "1", "sector": "Mural Carnes - Fiambreria", "pos": {"sheet": "sala", "r": 45, "c": 20}}, {"patente": "104", "area": "1", "comentario": "Gondolas", "producto": "cocina internacional", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 43, "c": 20}}, {"patente": "105", "area": "1", "comentario": "Gondolas", "producto": "dressing", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 41, "c": 20}}, {"patente": "106", "area": "1", "comentario": "Gondolas", "producto": "dressing", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 39, "c": 20}}, {"patente": "107", "area": "1", "comentario": "Gondolas", "producto": "pastas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 37, "c": 20}}, {"patente": "108", "area": "1", "comentario": "Gondolas", "producto": "pastas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 35, "c": 20}}, {"patente": "109", "area": "1", "comentario": "Gondolas", "producto": "pastas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 33, "c": 20}}, {"patente": "110", "area": "1", "comentario": "Gondolas", "producto": "Azucar/endulzantes", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 33, "c": 23}}, {"patente": "111", "area": "1", "comentario": "Gondolas", "producto": "te-hierbas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 35, "c": 23}}, {"patente": "112", "area": "1", "comentario": "Gondolas", "producto": "te-hierbas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 37, "c": 23}}, {"patente": "113", "area": "1", "comentario": "Gondolas", "producto": "café", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 39, "c": 23}}, {"patente": "114", "area": "1", "comentario": "Gondolas", "producto": "mermeladas - miel", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 41, "c": 23}}, {"patente": "115", "area": "1", "comentario": "Gondolas", "producto": "leches polvo", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 43, "c": 23}}, {"patente": "116", "area": "1", "comentario": "Gondolas", "producto": "Cereales - saborizantes", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 45, "c": 23}}, {"patente": "117", "area": "1", "comentario": "Gondolas", "producto": "cereales", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 47, "c": 23}}, {"patente": "118", "area": "1", "comentario": "Gondolas", "producto": "cereales", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 49, "c": 23}}, {"patente": "119", "area": "1", "comentario": "Gondolas", "producto": "chocolates", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 51, "c": 23}}, {"patente": "120", "area": "1", "comentario": "Gondolas", "producto": "confites", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 51, "c": 30}}, {"patente": "121", "area": "1", "comentario": "Gondolas", "producto": "Galletas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 49, "c": 30}}, {"patente": "122", "area": "1", "comentario": "Gondolas", "producto": "Galletas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 47, "c": 30}}, {"patente": "123", "area": "1", "comentario": "Gondolas", "producto": "Galletas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 45, "c": 30}}, {"patente": "124", "area": "1", "comentario": "Gondolas", "producto": "Galletas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 43, "c": 30}}, {"patente": "125", "area": "1", "comentario": "Gondolas", "producto": "snack", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 41, "c": 30}}, {"patente": "126", "area": "1", "comentario": "Gondolas", "producto": "snack", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 39, "c": 30}}, {"patente": "127", "area": "1", "comentario": "Gondolas", "producto": "snack", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 37, "c": 30}}, {"patente": "128", "area": "1", "comentario": "Gondolas", "producto": "snack", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 35, "c": 30}}, {"patente": "129", "area": "1", "comentario": "Gondolas", "producto": "encurtidos - mani", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 33, "c": 30}}, {"patente": "130", "area": "1", "comentario": "Gondolas", "producto": "tinturas y fijadores", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 33, "c": 33}}, {"patente": "131", "area": "1", "comentario": "Gondolas", "producto": "shampoo y acondicionadores", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 35, "c": 33}}, {"patente": "132", "area": "1", "comentario": "Gondolas", "producto": "shampoo y acondicionadores", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 37, "c": 33}}, {"patente": "133", "area": "1", "comentario": "Gondolas", "producto": "shampoo y acondicionadores", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 39, "c": 33}}, {"patente": "134", "area": "1", "comentario": "Gondolas", "producto": "shampoo y acondicionadores", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 41, "c": 33}}, {"patente": "135", "area": "1", "comentario": "Gondolas", "producto": "afeitado -cuidado personal", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 43, "c": 33}}, {"patente": "136", "area": "1", "comentario": "Gondolas", "producto": "jabones", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 45, "c": 33}}, {"patente": "137", "area": "1", "comentario": "Gondolas", "producto": "pasta dental", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 47, "c": 33}}, {"patente": "138", "area": "1", "comentario": "Gondolas", "producto": "proteccion femenina", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 49, "c": 33}}, {"patente": "139", "area": "1", "comentario": "Gondolas", "producto": "pañal de adulto", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 51, "c": 33}}, {"patente": "140", "area": "1", "comentario": "Gondolas", "producto": "desodorantes personal", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 51, "c": 41}}, {"patente": "141", "area": "1", "comentario": "Gondolas", "producto": "infantil", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 49, "c": 41}}, {"patente": "142", "area": "1", "comentario": "Gondolas", "producto": "pañales bebe", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 47, "c": 41}}, {"patente": "143", "area": "1", "comentario": "Gondolas", "producto": "pañales bebe", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 45, "c": 41}}, {"patente": "144", "area": "1", "comentario": "Gondolas", "producto": "pañales bebe", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 43, "c": 41}}, {"patente": "145", "area": "1", "comentario": "Gondolas", "producto": "Papel higienico", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 41, "c": 41}}, {"patente": "146", "area": "1", "comentario": "Gondolas", "producto": "Papel higienico", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 39, "c": 41}}, {"patente": "147", "area": "1", "comentario": "Gondolas", "producto": "Papel higienico", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 37, "c": 41}}, {"patente": "148", "area": "1", "comentario": "Gondolas", "producto": "toallas de papel", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 35, "c": 41}}, {"patente": "149", "area": "1", "comentario": "Gondolas", "producto": "toallas de papel -servilletas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 33, "c": 41}}, {"patente": "150", "area": "1", "comentario": "Gondolas", "producto": "bolsas de basura", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 33, "c": 44}}, {"patente": "151", "area": "1", "comentario": "Gondolas", "producto": "articulos de limpieza", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 35, "c": 44}}, {"patente": "152", "area": "1", "comentario": "Gondolas", "producto": "paños y esponjas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 37, "c": 44}}, {"patente": "153", "area": "1", "comentario": "Gondolas", "producto": "Lavalozas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 39, "c": 44}}, {"patente": "154", "area": "1", "comentario": "Gondolas", "producto": "ambientales", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 41, "c": 44}}, {"patente": "155", "area": "1", "comentario": "Gondolas", "producto": "limpiadores", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 43, "c": 44}}, {"patente": "156", "area": "1", "comentario": "Gondolas", "producto": "cloros", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 45, "c": 44}}, {"patente": "157", "area": "1", "comentario": "Gondolas", "producto": "tratamiento de ropa", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 47, "c": 44}}, {"patente": "158", "area": "1", "comentario": "Gondolas", "producto": "detergentes", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 49, "c": 44}}, {"patente": "159", "area": "1", "comentario": "Gondolas", "producto": "detergentes", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 51, "c": 44}}, {"patente": "160", "area": "1", "comentario": "Gondolas", "producto": "juguetes", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 51, "c": 52}}, {"patente": "161", "area": "1", "comentario": "Gondolas", "producto": "alimentos de animal", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 47, "c": 52}}, {"patente": "162", "area": "1", "comentario": "Gondolas", "producto": "alimentos de animal", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 45, "c": 52}}, {"patente": "163", "area": "1", "comentario": "Gondolas", "producto": "alimentos de animal", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 43, "c": 52}}, {"patente": "164", "area": "1", "comentario": "Gondolas", "producto": "alimentos de animal", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 41, "c": 52}}, {"patente": "165", "area": "1", "comentario": "Gondolas", "producto": "ferreteria", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 39, "c": 52}}, {"patente": "166", "area": "1", "comentario": "Gondolas", "producto": "librería-cumpleaños", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 37, "c": 52}}, {"patente": "167", "area": "1", "comentario": "Gondolas", "producto": "menaje", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 35, "c": 52}}, {"patente": "168", "area": "1", "comentario": "Gondolas", "producto": "menaje", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 33, "c": 52}}, {"patente": "169", "area": "1", "comentario": "exhibicion adicional", "producto": "vinos", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 31, "c": 55}}, {"patente": "170", "area": "1", "comentario": "Gondolas", "producto": "vinos", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 33, "c": 55}}, {"patente": "171", "area": "1", "comentario": "Gondolas", "producto": "vinos", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 35, "c": 55}}, {"patente": "172", "area": "1", "comentario": "Gondolas", "producto": "vinos", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 37, "c": 55}}, {"patente": "173", "area": "1", "comentario": "Gondolas", "producto": "vinos botellon", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 39, "c": 55}}, {"patente": "174", "area": "1", "comentario": "Gondolas", "producto": "vinos botellon", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 41, "c": 55}}, {"patente": "175", "area": "1", "comentario": "Gondolas", "producto": "piscos", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 43, "c": 55}}, {"patente": "176", "area": "1", "comentario": "Gondolas", "producto": "piscos sour", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 45, "c": 55}}, {"patente": "177", "area": "1", "comentario": "Gondolas", "producto": "licores", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 47, "c": 55}}, {"patente": "178", "area": "1", "comentario": "Gondolas", "producto": "licores", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 49, "c": 55}}, {"patente": "179", "area": "1", "comentario": "Gondolas", "producto": "licores", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 51, "c": 55}}, {"patente": "180", "area": "1", "comentario": "Gondolas", "producto": "jugos en polvo", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 51, "c": 63}}, {"patente": "181", "area": "1", "comentario": "Gondolas", "producto": "jugos liquidos", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 49, "c": 63}}, {"patente": "182", "area": "1", "comentario": "Gondolas", "producto": "jugos liquidos", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 47, "c": 63}}, {"patente": "183", "area": "1", "comentario": "Gondolas", "producto": "aguas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 45, "c": 63}}, {"patente": "184", "area": "1", "comentario": "Gondolas", "producto": "aguas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 43, "c": 63}}, {"patente": "185", "area": "1", "comentario": "Gondolas", "producto": "energeticas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 41, "c": 63}}, {"patente": "186", "area": "1", "comentario": "Gondolas", "producto": "isotonicas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 39, "c": 63}}, {"patente": "187", "area": "1", "comentario": "Gondolas", "producto": "cervezas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 37, "c": 63}}, {"patente": "188", "area": "1", "comentario": "Gondolas", "producto": "espumantes", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 35, "c": 63}}, {"patente": "189", "area": "1", "comentario": "Gondolas", "producto": "espumantes", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 33, "c": 63}}, {"patente": "190", "area": "1", "comentario": "Gondolas", "producto": "vinos blancos", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 31, "c": 63}}, {"patente": "191", "area": "1", "comentario": "cooler", "producto": "cerveza", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 31, "c": 66}}, {"patente": "192", "area": "1", "comentario": "cooler", "producto": "cerveza", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 33, "c": 66}}, {"patente": "193", "area": "1", "comentario": "cooler", "producto": "cerveza", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 35, "c": 66}}, {"patente": "194", "area": "1", "comentario": "cooler", "producto": "cerveza", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 37, "c": 66}}, {"patente": "195", "area": "1", "comentario": "cooler", "producto": "cerveza", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 39, "c": 66}}, {"patente": "196", "area": "1", "comentario": "cooler", "producto": "cerveza", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 41, "c": 66}}, {"patente": "197", "area": "1", "comentario": "cooler", "producto": "cerveza", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 43, "c": 66}}, {"patente": "198", "area": "1", "comentario": "cooler", "producto": "gaseosas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 45, "c": 66}}, {"patente": "199", "area": "1", "comentario": "cooler", "producto": "gaseosas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 47, "c": 66}}, {"patente": "200", "area": "1", "comentario": "cooler", "producto": "gaseosas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 49, "c": 66}}, {"patente": "201", "area": "1", "comentario": "cooler", "producto": "gaseosas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 51, "c": 66}}, {"patente": "202", "area": "1", "comentario": "Gondolas", "producto": "pan envasado", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 16, "c": 71}}, {"patente": "203", "area": "1", "comentario": "Gondolas", "producto": "pan envasado", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 14, "c": 71}}, {"patente": "204", "area": "1", "comentario": "Gondolas", "producto": "pan envasado", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 12, "c": 71}}, {"patente": "205", "area": "1", "comentario": "Gondolas", "producto": "leches especiales", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 12, "c": 74}}, {"patente": "206", "area": "1", "comentario": "Gondolas", "producto": "leches saborizadas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 14, "c": 74}}, {"patente": "207", "area": "1", "comentario": "Gondolas", "producto": "leches saborizadas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 16, "c": 74}}, {"patente": "208", "area": "1", "comentario": "Gondolas", "producto": "leches especiales", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 16, "c": 80}}, {"patente": "209", "area": "1", "comentario": "Gondolas", "producto": "cremas de leche", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 14, "c": 80}}, {"patente": "210", "area": "1", "comentario": "Gondolas", "producto": "manjar", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 12, "c": 80}}, {"patente": "211", "area": "1", "comentario": "Gondolas", "producto": "leches liquidas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 12, "c": 83}}, {"patente": "212", "area": "1", "comentario": "Gondolas", "producto": "leches liquidas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 14, "c": 83}}, {"patente": "213", "area": "1", "comentario": "Gondolas", "producto": "leches liquidas", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 16, "c": 83}}, {"patente": "214", "area": "1", "comentario": "Islas congelados", "producto": "helados", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 38, "c": 76}}, {"patente": "215", "area": "1", "comentario": "Islas congelados", "producto": "helados", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 40, "c": 76}}, {"patente": "216", "area": "1", "comentario": "Islas congelados", "producto": "helados", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 42, "c": 76}}, {"patente": "217", "area": "1", "comentario": "Islas congelados", "producto": "helados", "tipo": "1", "sector": "Gondolas Abarrotes", "pos": {"sheet": "sala", "r": 44, "c": 76}}, {"patente": "218", "area": "1", "comentario": "Islas congelados", "producto": "helados", "tipo": "1", "sector": "Pallet Exhibiciones", "pos": {"sheet": "sala", "r": 46, "c": 76}}, {"patente": "219", "area": "1", "comentario": "Islas congelados", "producto": "helados", "tipo": "1", "sector": "Pallet Exhibiciones", "pos": {"sheet": "sala", "r": 48, "c": 76}}, {"patente": "220", "area": "1", "comentario": "Islas congelados", "producto": "mariscos -pescados", "tipo": "1", "sector": "Pallet Exhibiciones", "pos": {"sheet": "sala", "r": 50, "c": 76}}, {"patente": "221", "area": "1", "comentario": "Islas congelados", "producto": "mariscos -pescados", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 52, "c": 76}}, {"patente": "222", "area": "1", "comentario": "Islas congelados", "producto": "hamburgesas", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 52, "c": 79}}, {"patente": "223", "area": "1", "comentario": "Islas congelados", "producto": "hamburgesas", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 50, "c": 79}}, {"patente": "224", "area": "1", "comentario": "Islas congelados", "producto": "deli", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 48, "c": 79}}, {"patente": "225", "area": "1", "comentario": "Islas congelados", "producto": "deli", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 46, "c": 79}}, {"patente": "226", "area": "1", "comentario": "Islas congelados", "producto": "frutas congeladas", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 44, "c": 79}}, {"patente": "227", "area": "1", "comentario": "Islas congelados", "producto": "carniceria congelada", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 42, "c": 79}}, {"patente": "228", "area": "1", "comentario": "Islas congelados", "producto": "verduras congeladas", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 40, "c": 79}}, {"patente": "229", "area": "1", "comentario": "Islas congelados", "producto": "verduras congeladas", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 38, "c": 79}}, {"patente": "230", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 32, "c": 80}}, {"patente": "231", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 29, "c": 80}}, {"patente": "232", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 26, "c": 80}}, {"patente": "233", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 26, "c": 76}}, {"patente": "234", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 29, "c": 76}}, {"patente": "235", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 32, "c": 76}}, {"patente": "236", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Congelados Islas", "pos": {"sheet": "sala", "r": 22, "c": 47}}, {"patente": "237", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Zona Pallet Exhibiciones", "pos": {"sheet": "sala", "r": 25, "c": 11}}, {"patente": "238", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Zona Pallet Exhibiciones", "pos": {"sheet": "sala", "r": 25, "c": 8}}, {"patente": "239", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Zona Pallet Exhibiciones", "pos": {"sheet": "sala", "r": 31, "c": 8}}, {"patente": "240", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Zona Pallet Exhibiciones", "pos": {"sheet": "sala", "r": 31, "c": 11}}, {"patente": "241", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Zona Pallet Exhibiciones", "pos": {"sheet": "sala", "r": 36, "c": 8}}, {"patente": "242", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Camillas FFyVV", "pos": {"sheet": "sala", "r": 36, "c": 11}}, {"patente": "243", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Camillas FFyVV", "pos": {"sheet": "sala", "r": 41, "c": 8}}, {"patente": "244", "area": "1", "comentario": "exhibicion adicional", "producto": "exhibicion adicional", "tipo": "1", "sector": "Camillas FFyVV", "pos": {"sheet": "sala", "r": 41, "c": 11}}, {"patente": "245", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Camillas FFyVV", "pos": {"sheet": "sala", "r": 47, "c": 8}}, {"patente": "246", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Camillas FFyVV", "pos": {"sheet": "sala", "r": 47, "c": 12}}, {"patente": "247", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Camillas FFyVV", "pos": {"sheet": "sala", "r": 49, "c": 12}}, {"patente": "248", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "sala", "r": 50, "c": 12}}, {"patente": "249", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "sala", "r": 51, "c": 12}}, {"patente": "250", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "sala", "r": 52, "c": 12}}, {"patente": "251", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "sala", "r": 53, "c": 12}}, {"patente": "252", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "sala", "r": 54, "c": 12}}, {"patente": "253", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "sala", "r": 54, "c": 8}}, {"patente": "254", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "sala", "r": 53, "c": 8}}, {"patente": "255", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "sala", "r": 52, "c": 8}}, {"patente": "256", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "sala", "r": 51, "c": 8}}, {"patente": "257", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "sala", "r": 50, "c": 8}}, {"patente": "258", "area": "1", "comentario": "FFVV", "producto": "Camillas FFVV", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "sala", "r": 49, "c": 8}}, {"patente": "259", "area": "20", "comentario": "RACK Bodega", "producto": "papeleria", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 34, "c": 1}}, {"patente": "260", "area": "20", "comentario": "RACK Bodega", "producto": "bebidas-cervezas", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 36, "c": 1}}, {"patente": "261", "area": "20", "comentario": "RACK Bodega", "producto": "bebidas cervezas", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 38, "c": 1}}, {"patente": "262", "area": "20", "comentario": "RACK Bodega", "producto": "papeleria", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 38, "c": 12}}, {"patente": "263", "area": "20", "comentario": "RACK Bodega", "producto": "bebidas cervezas", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 36, "c": 12}}, {"patente": "264", "area": "20", "comentario": "RACK Bodega", "producto": "bebidas cervezas", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 34, "c": 12}}, {"patente": "265", "area": "20", "comentario": "RACK Bodega", "producto": "snack", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 34, "c": 23}}, {"patente": "266", "area": "20", "comentario": "RACK Bodega", "producto": "bebidas cervezas", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 36, "c": 23}}, {"patente": "267", "area": "20", "comentario": "RACK Bodega", "producto": "bebidas cervezas", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 38, "c": 23}}, {"patente": "268", "area": "20", "comentario": "RACK Bodega", "producto": "snack", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 38, "c": 34}}, {"patente": "269", "area": "20", "comentario": "RACK Bodega", "producto": "bebidas cervezas", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 36, "c": 34}}, {"patente": "270", "area": "20", "comentario": "RACK Bodega", "producto": "bebidas cervezas", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 34, "c": 34}}, {"patente": "271", "area": "20", "comentario": "RACK Bodega", "producto": "vinos", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 37, "c": 48}}, {"patente": "272", "area": "20", "comentario": "RACK Bodega", "producto": "vinos", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 38, "c": 49}}, {"patente": "273", "area": "20", "comentario": "RACK Bodega", "producto": "vinos", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 36, "c": 49}}, {"patente": "274", "area": "20", "comentario": "RACK Bodega", "producto": "jugos polvo", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 34, "c": 49}}, {"patente": "275", "area": "20", "comentario": "Bodega", "producto": "mermas", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 29, "c": 58}}, {"patente": "276", "area": "20", "comentario": "RACK Bodega", "producto": "shampoo y acondicionadores", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 21, "c": 58}}, {"patente": "277", "area": "20", "comentario": "RACK Bodega", "producto": "pañales bebe", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 17, "c": 58}}, {"patente": "278", "area": "20", "comentario": "RACK Bodega", "producto": "pañales  bebe", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 13, "c": 58}}, {"patente": "279", "area": "20", "comentario": "RACK Bodega", "producto": "cuidado personal", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 14, "c": 51}}, {"patente": "280", "area": "20", "comentario": "RACK Bodega", "producto": "cuidado personal", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 14, "c": 49}}, {"patente": "281", "area": "20", "comentario": "RACK Bodega", "producto": "articulos de aseo", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 6, "c": 45}}, {"patente": "282", "area": "20", "comentario": "RACK Bodega", "producto": "articulos de aseo", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 3, "c": 45}}, {"patente": "283", "area": "20", "comentario": "RACK Bodega", "producto": "articulos de aseo", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 7, "c": 34}}, {"patente": "284", "area": "20", "comentario": "RACK Bodega", "producto": "articulos de aseo", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 5, "c": 34}}, {"patente": "285", "area": "20", "comentario": "RACK Bodega", "producto": "articulos de aseo", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 3, "c": 34}}, {"patente": "286", "area": "20", "comentario": "RACK Bodega", "producto": "articulos de aseo", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 7, "c": 23}}, {"patente": "287", "area": "20", "comentario": "RACK Bodega", "producto": "articulos de aseo", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 5, "c": 23}}, {"patente": "288", "area": "20", "comentario": "RACK Bodega", "producto": "articulos de aseo", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 3, "c": 23}}, {"patente": "289", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 7, "c": 12}}, {"patente": "290", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 5, "c": 12}}, {"patente": "291", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 3, "c": 12}}, {"patente": "292", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 7, "c": 1}}, {"patente": "293", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 5, "c": 1}}, {"patente": "294", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 3, "c": 1}}, {"patente": "295", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 11, "c": 1}}, {"patente": "296", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 11, "c": 3}}, {"patente": "297", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 11, "c": 5}}, {"patente": "298", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 18, "c": 1}}, {"patente": "299", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 18, "c": 3}}, {"patente": "300", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 18, "c": 5}}, {"patente": "301", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 23, "c": 1}}, {"patente": "302", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 23, "c": 3}}, {"patente": "303", "area": "20", "comentario": "RACK Bodega", "producto": "PGC", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 23, "c": 5}}, {"patente": "304", "area": "20", "comentario": "patente auxiliar", "producto": "trancito bodega", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 12, "c": 13}}, {"patente": "305", "area": "20", "comentario": "patente auxiliar", "producto": "trancito bodega", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 17, "c": 13}}, {"patente": "306", "area": "20", "comentario": "patente auxiliar", "producto": "trancito bodega", "tipo": "1", "sector": "Bodega", "pos": {"sheet": "bodega", "r": 21, "c": 13}}, {"patente": "307", "area": "20", "comentario": "patente auxiliar", "producto": "trancito bodega", "tipo": "1", "sector": "Bodega PAR", "pos": {"sheet": "bodega", "r": 12, "c": 15}}, {"patente": "308", "area": "20", "comentario": "patente auxiliar", "producto": "trancito bodega", "tipo": "1", "sector": "Bodega PAR", "pos": {"sheet": "bodega", "r": 17, "c": 15}}, {"patente": "309", "area": "20", "comentario": "patente auxiliar", "producto": "trancito bodega", "tipo": "1", "sector": "Bodega PAR", "pos": {"sheet": "bodega", "r": 21, "c": 15}}, {"patente": "310", "area": "20", "comentario": "patente auxiliar", "producto": "trancito bodega", "tipo": "1", "sector": "Bodega PAR", "pos": {"sheet": "bodega", "r": 12, "c": 17}}, {"patente": "311", "area": "20", "comentario": "patente auxiliar", "producto": "trancito bodega", "tipo": "1", "sector": "Bodega PAR", "pos": {"sheet": "bodega", "r": 17, "c": 17}}, {"patente": "312", "area": "20", "comentario": "patente auxiliar", "producto": "trancito bodega", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 21, "c": 17}}, {"patente": "313", "area": "20", "comentario": "bodega PAR", "producto": "Bodega PAR", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 18, "c": 61}}, {"patente": "314", "area": "20", "comentario": "bodega PAR", "producto": "Bodega PAR", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 12, "c": 62}}, {"patente": "315", "area": "20", "comentario": "bodega PAR", "producto": "Bodega PAR", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 12, "c": 65}}, {"patente": "316", "area": "20", "comentario": "bodega PAR", "producto": "Bodega PAR", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 17, "c": 68}}, {"patente": "317", "area": "20", "comentario": "bodega PAR", "producto": "Bodega PAR", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 21, "c": 68}}, {"patente": "318", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 37, "c": 77}}, {"patente": "319", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 37, "c": 81}}, {"patente": "320", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 37, "c": 85}}, {"patente": "321", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 35, "c": 90}}, {"patente": "322", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 35, "c": 103}}, {"patente": "323", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 20, "c": 107}}, {"patente": "324", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 20, "c": 103}}, {"patente": "325", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 20, "c": 99}}, {"patente": "326", "area": "20", "comentario": "camara", "producto": "camara panaderia", "tipo": "1", "sector": "Pallets Patio Recepcion", "pos": {"sheet": "bodega", "r": 14, "c": 103}}, {"patente": "327", "area": "20", "comentario": "camara", "producto": "camara panaderia", "tipo": "1", "sector": "Camara LAF", "pos": {"sheet": "bodega", "r": 14, "c": 106}}, {"patente": "328", "area": "20", "comentario": "camara", "producto": "camara panaderia", "tipo": "1", "sector": "Camara LAF", "pos": {"sheet": "bodega", "r": 14, "c": 109}}, {"patente": "329", "area": "20", "comentario": "camara", "producto": "camara panaderia", "tipo": "1", "sector": "Camara LAF", "pos": {"sheet": "bodega", "r": 14, "c": 112}}, {"patente": "330", "area": "20", "comentario": "camara", "producto": "camara panaderia", "tipo": "1", "sector": "Camara LAF", "pos": {"sheet": "bodega", "r": 4, "c": 112}}, {"patente": "331", "area": "20", "comentario": "camara", "producto": "camara panaderia", "tipo": "1", "sector": "Camara LAF", "pos": {"sheet": "bodega", "r": 4, "c": 109}}, {"patente": "332", "area": "20", "comentario": "camara", "producto": "camara panaderia", "tipo": "1", "sector": "Camara LAF", "pos": {"sheet": "bodega", "r": 4, "c": 106}}, {"patente": "333", "area": "20", "comentario": "camara", "producto": "camara panaderia", "tipo": "1", "sector": "Camara LAF", "pos": {"sheet": "bodega", "r": 4, "c": 103}}, {"patente": "334", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Camara LAF", "pos": {"sheet": "bodega", "r": 4, "c": 93}}, {"patente": "335", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Camara 1 FFVV", "pos": {"sheet": "bodega", "r": 4, "c": 90}}, {"patente": "336", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Camara 1 FFVV", "pos": {"sheet": "bodega", "r": 11, "c": 93}}, {"patente": "337", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Camara 1 FFVV", "pos": {"sheet": "bodega", "r": 11, "c": 90}}, {"patente": "338", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Camara de Carnes", "pos": {"sheet": "bodega", "r": 21, "c": 90}}, {"patente": "339", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Camara de Carnes", "pos": {"sheet": "bodega", "r": 24, "c": 85}}, {"patente": "340", "area": "20", "comentario": "Patio Recepcion", "producto": "Patentes Libres", "tipo": "1", "sector": "Camara de Carnes", "pos": {"sheet": "bodega", "r": 24, "c": 81}}, {"patente": "341", "area": "20", "comentario": "camara", "producto": "Camara Lacteos", "tipo": "1", "sector": "Camara de Carnes", "pos": {"sheet": "camaras", "r": 61, "c": 85}}, {"patente": "342", "area": "20", "comentario": "camara", "producto": "Camara Lacteos", "tipo": "1", "sector": "Camara de Congelados", "pos": {"sheet": "camaras", "r": 61, "c": 72}}, {"patente": "343", "area": "20", "comentario": "camara", "producto": "camara FFYVV", "tipo": "1", "sector": "Camara de Congelados", "pos": {"sheet": "camaras", "r": 61, "c": 67}}, {"patente": "344", "area": "20", "comentario": "camara", "producto": "camara FFYVV", "tipo": "1", "sector": "Camara de Congelados", "pos": {"sheet": "camaras", "r": 71, "c": 51}}, {"patente": "345", "area": "20", "comentario": "camara", "producto": "camara FFYVV", "tipo": "1", "sector": "Camara de Congelados", "pos": {"sheet": "camaras", "r": 61, "c": 51}}, {"patente": "346", "area": "20", "comentario": "camara", "producto": "Camara congelados", "tipo": "1", "sector": "Camara de Congelados", "pos": {"sheet": "camaras", "r": 32, "c": 3}}, {"patente": "347", "area": "20", "comentario": "camara", "producto": "Camara congelados", "tipo": "1", "sector": "Camara de Congelados", "pos": {"sheet": "camaras", "r": 23, "c": 3}}, {"patente": "348", "area": "20", "comentario": "camara", "producto": "Camara congelados", "tipo": "1", "sector": "Camara de Congelados", "pos": {"sheet": "camaras", "r": 20, "c": 3}}, {"patente": "349", "area": "20", "comentario": "camara", "producto": "Camara congelados", "tipo": "1", "sector": "Sector Huevos", "pos": {"sheet": "camaras", "r": 20, "c": 9}}, {"patente": "350", "area": "20", "comentario": "camara", "producto": "Camara congelados", "tipo": "1", "sector": "Sector Huevos", "pos": {"sheet": "camaras", "r": 20, "c": 15}}, {"patente": "351", "area": "20", "comentario": "camara", "producto": "Camara congelados", "tipo": "1", "sector": "Sector Huevos", "pos": {"sheet": "camaras", "r": 26, "c": 15}}, {"patente": "352", "area": "20", "comentario": "camara", "producto": "Camara congelados", "tipo": "1", "sector": "Sector Huevos", "pos": {"sheet": "camaras", "r": 32, "c": 13}}, {"patente": "353", "area": "20", "comentario": "camara", "producto": "sala procesos fiambreria", "tipo": "1", "sector": "Sector Huevos", "pos": {"sheet": "camaras", "r": 29, "c": 19}}, {"patente": "354", "area": "20", "comentario": "camara", "producto": "sala procesos fiambreria", "tipo": "1", "sector": "Sector Huevos", "pos": {"sheet": "camaras", "r": 22, "c": 19}}, {"patente": "355", "area": "20", "comentario": "camara", "producto": "Camara Deli", "tipo": "1", "sector": "Sector Huevos", "pos": {"sheet": "camaras", "r": 17, "c": 6}}, {"patente": "356", "area": "20", "comentario": "camara", "producto": "Camara Deli", "tipo": "1", "sector": "Camara Fiambreria", "pos": {"sheet": "camaras", "r": 11, "c": 3}}, {"patente": "357", "area": "20", "comentario": "camara", "producto": "sala procesos fiambreria", "tipo": "1", "sector": "Camara Fiambreria", "pos": {"sheet": "camaras", "r": 11, "c": 23}}, {"patente": "358", "area": "20", "comentario": "camara", "producto": "sala procesos fiambreria", "tipo": "1", "sector": "Camara Fiambreria", "pos": {"sheet": "camaras", "r": 11, "c": 27}}, {"patente": "359", "area": "20", "comentario": "camara", "producto": "sala procesos fiambreria", "tipo": "1", "sector": "Camara Fiambreria", "pos": {"sheet": "camaras", "r": 18, "c": 27}}, {"patente": "360", "area": "20", "comentario": "camara", "producto": "sala procesos fiambreria", "tipo": "1", "sector": "Camara Fiambreria", "pos": {"sheet": "camaras", "r": 24, "c": 27}}, {"patente": "361", "area": "20", "comentario": "camara", "producto": "sala procesos fiambreria", "tipo": "1", "sector": "Camara Fiambreria", "pos": {"sheet": "camaras", "r": 30, "c": 27}}, {"patente": "362", "area": "20", "comentario": "camara", "producto": "camara fiambreria", "tipo": "1", "sector": "Camara Fiambreria", "pos": {"sheet": "camaras", "r": 31, "c": 30}}, {"patente": "363", "area": "20", "comentario": "camara", "producto": "camara fiambreria", "tipo": "1", "sector": "Camara Fiambreria", "pos": {"sheet": "camaras", "r": 26, "c": 30}}, {"patente": "364", "area": "20", "comentario": "camara", "producto": "camara fiambreria", "tipo": "1", "sector": "Camara Fiambreria", "pos": {"sheet": "camaras", "r": 21, "c": 30}}, {"patente": "365", "area": "20", "comentario": "camara", "producto": "camara fiambreria", "tipo": "1", "sector": "Camara Fiambreria", "pos": {"sheet": "camaras", "r": 11, "c": 30}}, {"patente": "366", "area": "20", "comentario": "camara", "producto": "camara fiambreria", "tipo": "1", "sector": "Camara 2 FFVV", "pos": {"sheet": "camaras", "r": 11, "c": 35}}, {"patente": "367", "area": "20", "comentario": "camara", "producto": "camara fiambreria", "tipo": "1", "sector": "Camara 2 FFVV", "pos": {"sheet": "camaras", "r": 11, "c": 40}}, {"patente": "368", "area": "20", "comentario": "camara", "producto": "camara fiambreria", "tipo": "1", "sector": "Camara 2 FFVV", "pos": {"sheet": "camaras", "r": 16, "c": 40}}, {"patente": "369", "area": "20", "comentario": "camara", "producto": "camara fiambreria", "tipo": "1", "sector": "Camara 2 FFVV", "pos": {"sheet": "camaras", "r": 21, "c": 40}}, {"patente": "370", "area": "20", "comentario": "camara", "producto": "camara fiambreria", "tipo": "1", "sector": "Camara 2 FFVV", "pos": {"sheet": "camaras", "r": 26, "c": 40}}, {"patente": "371", "area": "20", "comentario": "camara", "producto": "camara fiambreria", "tipo": "1", "sector": "Camara 2 FFVV", "pos": {"sheet": "camaras", "r": 31, "c": 40}}, {"patente": "372", "area": "20", "comentario": "camara", "producto": "camara FFYVV", "tipo": "1", "sector": "Camara 2 FFVV", "pos": {"sheet": "camaras", "r": 29, "c": 45}}, {"patente": "373", "area": "20", "comentario": "camara", "producto": "camara FFYVV", "tipo": "1", "sector": "Sala de Procesos", "pos": {"sheet": "camaras", "r": 22, "c": 45}}, {"patente": "374", "area": "20", "comentario": "camara", "producto": "camara FFYVV", "tipo": "1", "sector": "Sala de Procesos", "pos": {"sheet": "camaras", "r": 15, "c": 45}}, {"patente": "375", "area": "20", "comentario": "camara", "producto": "camara FFYVV", "tipo": "1", "sector": "Sala de Procesos", "pos": {"sheet": "camaras", "r": 11, "c": 45}}, {"patente": "376", "area": "20", "comentario": "camara", "producto": "camara FFYVV", "tipo": "1", "sector": "Camara de Carnes", "pos": {"sheet": "camaras", "r": 15, "c": 56}}, {"patente": "377", "area": "20", "comentario": "camara", "producto": "camara FFYVV", "tipo": "1", "sector": "Camara de Carnes", "pos": {"sheet": "camaras", "r": 22, "c": 56}}, {"patente": "378", "area": "20", "comentario": "camara", "producto": "camara FFYVV", "tipo": "1", "sector": "Camara de Carnes", "pos": {"sheet": "camaras", "r": 29, "c": 56}}, {"patente": "379", "area": "20", "comentario": "camara", "producto": "Sala de Proceso Carniceria", "tipo": "1", "sector": "Camara de Carnes", "pos": {"sheet": "camaras", "r": 28, "c": 69}}, {"patente": "380", "area": "20", "comentario": "camara", "producto": "Sala de Proceso Carniceria", "tipo": "1", "sector": "Camara de Carnes", "pos": {"sheet": "camaras", "r": 20, "c": 69}}, {"patente": "381", "area": "20", "comentario": "camara", "producto": "Sala de Proceso Carniceria", "tipo": "1", "sector": "Camara de Carnes", "pos": {"sheet": "camaras", "r": 11, "c": 69}}, {"patente": "382", "area": "20", "comentario": "camara", "producto": "camara carniceria", "tipo": "1", "sector": "Camara de Carnes", "pos": {"sheet": "camaras", "r": 29, "c": 73}}, {"patente": "383", "area": "20", "comentario": "Bodega", "producto": "camara carniceria", "tipo": "1", "sector": "Pallet Trastienda", "pos": {"sheet": "camaras", "r": 22, "c": 73}}, {"patente": "384", "area": "20", "comentario": "Trastienda", "producto": "camara carniceria", "tipo": "1", "sector": "Pallet Trastienda", "pos": {"sheet": "camaras", "r": 15, "c": 73}}, {"patente": "385", "area": "20", "comentario": "Trastienda", "producto": "camara carniceria", "tipo": "1", "sector": "Pallet Trastienda", "pos": {"sheet": "camaras", "r": 11, "c": 73}}, {"patente": "386", "area": "20", "comentario": "Trastienda", "producto": "camara carniceria", "tipo": "1", "sector": "Pallet Trastienda", "pos": {"sheet": "camaras", "r": 15, "c": 84}}, {"patente": "387", "area": "20", "comentario": "camara", "producto": "camara carniceria", "tipo": "1", "sector": "Camara de Lacteos", "pos": {"sheet": "camaras", "r": 22, "c": 84}}, {"patente": "388", "area": "20", "comentario": "camara", "producto": "camara carniceria", "tipo": "1", "sector": "Camara de Lacteos", "pos": {"sheet": "camaras", "r": 29, "c": 84}}, {"patente": "389", "area": "20", "comentario": "patente auxiliar", "producto": "lacteos", "tipo": "1", "sector": "Camara de Lacteos", "pos": {"sheet": "camaras", "r": 29, "c": 89}}, {"patente": "390", "area": "20", "comentario": "patente auxiliar", "producto": "lacteos", "tipo": "1", "sector": "Camara de Lacteos", "pos": {"sheet": "camaras", "r": 22, "c": 89}}, {"patente": "391", "area": "20", "comentario": "patente auxiliar", "producto": "lacteos", "tipo": "1", "sector": "Camara de Lacteos", "pos": {"sheet": "camaras", "r": 15, "c": 89}}, {"patente": "392", "area": "20", "comentario": "patente auxiliar", "producto": "lacteos", "tipo": "1", "sector": "Camara de Lacteos", "pos": {"sheet": "camaras", "r": 27, "c": 103}}, {"patente": "393", "area": "20", "comentario": "camara", "producto": "lacteos", "tipo": "1", "sector": "Camara de Lacteos", "pos": {"sheet": "camaras", "r": 27, "c": 108}}, {"patente": "394", "area": "20", "comentario": "camara", "producto": "lacteos", "tipo": "1", "sector": "Pallet Trastienda", "pos": {"sheet": "camaras", "r": 27, "c": 113}}, {"patente": "395", "area": "20", "comentario": "camara", "producto": "lacteos", "tipo": "None", "sector": "Mermas y Devoluciones", "pos": {"sheet": "camaras", "r": 26, "c": 127}}, {"patente": "396", "area": "20", "comentario": "camara", "producto": "lacteos", "tipo": "None", "sector": "Mermas y Devoluciones", "pos": {"sheet": "camaras", "r": 11, "c": 123}}, {"patente": "397", "area": "20", "comentario": "camara", "producto": "lacteos", "tipo": "1", "sector": "Sala de Procesos", "pos": {"sheet": "camaras", "r": 11, "c": 118}}, {"patente": "398", "area": "20", "comentario": "camara", "producto": "lacteos", "tipo": "1", "sector": "Sala de Procesos", "pos": {"sheet": "camaras", "r": 11, "c": 113}}, {"patente": "399", "area": "20", "comentario": "camara", "producto": "lacteos", "tipo": "1", "sector": "Sala de Procesos", "pos": {"sheet": "camaras", "r": 11, "c": 108}}, {"patente": "400", "area": "20", "comentario": "patente auxiliar", "producto": "lacteos", "tipo": "1", "sector": "Devolucion Panaderia", "pos": {"sheet": "camaras", "r": 11, "c": 103}}, {"patente": "401", "area": "20", "comentario": "trastienda", "producto": "panaderia", "tipo": "1", "sector": "Devolucion Panaderia", "pos": {"sheet": "sala", "r": 4, "c": 38}}, {"patente": "402", "area": "20", "comentario": "trastienda", "producto": "panaderia", "tipo": "None", "sector": "Sin Sector", "pos": {"sheet": "sala", "r": 4, "c": 42}}, {"patente": "403", "area": "20", "comentario": "trastienda", "producto": "panaderia", "tipo": "1", "sector": "Sin Sector", "pos": {"sheet": "sala", "r": 4, "c": 45}}, {"patente": "404", "area": "20", "comentario": "trastienda", "producto": "panaderia", "tipo": "None", "sector": "Sin Sector", "pos": {"sheet": "sala", "r": 4, "c": 48}}, {"patente": "405", "area": "20", "comentario": "trastienda", "producto": "panaderia", "tipo": "None", "sector": "Sin Sector", "pos": {"sheet": "sala", "r": 5, "c": 50}}, {"patente": "406", "area": "20", "comentario": "trastienda", "producto": "panaderia", "tipo": "1", "sector": "Sin Sector", "pos": {"sheet": "sala", "r": 5, "c": 55}}, {"patente": "4001", "area": "20", "comentario": "Inventario UULL", "producto": "Sala de Ventas", "tipo": "1", "sector": "UULL Sala"}, {"patente": "4002", "area": "20", "comentario": "Inventario UULL", "producto": "Camaras", "tipo": "1", "sector": "UULL Camara"}, {"patente": "4003", "area": "20", "comentario": "Inventario UULL", "producto": "Bodegas", "tipo": "1", "sector": "UULL Bodega"}, {"patente": "4004", "area": "20", "comentario": "Inventario UULL", "producto": "Recepcion", "tipo": "1", "sector": "UULL Recepcion"}, {"patente": "9999", "area": "20", "comentario": "Complementario", "producto": "recuento", "tipo": "1", "sector": "Recuento"}], "labels": {"sala": [{"r": 1, "c": 67, "t": "MURAL LACTEOS"}, {"r": 5, "c": 57, "t": "TORTAS"}, {"r": 6, "c": 40, "t": "Trastienda"}, {"r": 8, "c": 10, "t": "ACCESO BODEGA"}, {"r": 9, "c": 50, "t": "Trastienda"}, {"r": 13, "c": 37, "t": "PANADERIA"}, {"r": 14, "c": 24, "t": "DELY"}, {"r": 51, "c": 1, "t": "FFVV"}, {"r": 67, "c": 86, "t": "SAC"}, {"r": 79, "c": 42, "t": "Patente 1 a la 258 (Area 1)\nPatente 513 a la 517 (Area 20)"}], "camaras": [{"r": 4, "c": 97, "t": "ESCALERA"}, {"r": 11, "c": 61, "t": "SALA DE PROCESOS"}, {"r": 15, "c": 50, "t": "CAMARA FFVV"}, {"r": 15, "c": 78, "t": "CAMARA CARNES"}, {"r": 16, "c": 35, "t": "CAMARA   FIAMBRERIA"}, {"r": 18, "c": 108, "t": "CAMARA LACTEOS"}, {"r": 24, "c": 7, "t": "CAMARA DE CONGELADOS"}, {"r": 34, "c": 125, "t": "MONTACARGAS"}, {"r": 40, "c": 55, "t": "CAMARAS AREA 20"}, {"r": 44, "c": 108, "t": "CASINO"}, {"r": 51, "c": 3, "t": "CAMIÓN EN TRANSITO"}, {"r": 61, "c": 77, "t": "CAMARA LACTEOS"}, {"r": 61, "c": 95, "t": "ACCESO A BODEGA"}, {"r": 67, "c": 56, "t": "CAMARA FFVV"}, {"r": 80, "c": 40, "t": "Patente 341 a la 400  (Area 20)"}], "bodega": [{"r": 1, "c": 15, "t": "PLANO BODEGA ETCHEVERS 714"}, {"r": 3, "c": 75, "t": "CASINO"}, {"r": 10, "c": 100, "t": "CAMARA LAF"}, {"r": 18, "c": 64, "t": "PAR"}, {"r": 25, "c": 66, "t": "ACCESO BODEGA"}, {"r": 28, "c": 95, "t": "PATIO RECEPCIÓN"}, {"r": 29, "c": 61, "t": "RECEPCIÓN"}, {"r": 31, "c": 74, "t": "PATIO RECEPCIÓN"}, {"r": 43, "c": 2, "t": "Patente 259 a la 340 (Area 20)"}]}, "dims": {"sala": {"maxrow": 79, "maxcol": 92}, "camaras": {"maxrow": 80, "maxcol": 127}, "bodega": {"maxrow": 43, "maxcol": 112}}};
+
+/* =========================================================
+   ESTADO / PERSISTENCIA
+   ========================================================= */
+const STORAGE_KEY = 'turno_0714_estado_v1';
+
+function loadState(){
+  try{
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+  }catch(e){ return {}; }
+}
+function saveState(state){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+let STATE = loadState();
+
+function getEstadoPatente(id){
+  const s = STATE[id];
+  if(!s) return {fechas:false, flejes:false, responsable:'', updatedAt:null};
+  return s;
+}
+function computeStatus(s){
+  if(s.fechas && s.flejes) return 'completado';
+  if(s.fechas || s.flejes) return 'parcial';
+  return 'pendiente';
+}
+
+/* =========================================================
+   FILTROS / VISTA
+   ========================================================= */
+let currentArea = 'sala';       // sala | camaras | bodega
+let currentStatus = 'todos';    // todos | pendiente | parcial | completado
+let currentSearch = '';
+let activePatenteId = null;
+
+const AREA_SHEET_MAP = { sala:'sala', camaras:'camaras', bodega:'bodega' };
+const AREA_TITLES = { sala:'Plano · Sala de Ventas', camaras:'Plano · Cámaras', bodega:'Plano · Bodega' };
+
+// Determina a qué hoja/mapa pertenece cada patente según su posición real
+function patentesForArea(areaKey){
+  const sheet = AREA_SHEET_MAP[areaKey];
+  return RAW_DATA.patentes.filter(p => p.pos && p.pos.sheet === sheet);
+}
+
+function matchesFilters(p){
+  const s = getEstadoPatente(p.patente);
+  const status = computeStatus(s);
+  if(currentStatus !== 'todos' && status !== currentStatus) return false;
+  if(currentSearch){
+    const q = currentSearch.toLowerCase();
+    const hay = (p.patente + ' ' + p.sector + ' ' + p.comentario + ' ' + p.producto).toLowerCase();
+    if(!hay.includes(q)) return false;
+  }
+  return true;
+}
+
+/* =========================================================
+   RENDER: MAPA
+   ========================================================= */
+function renderMap(){
+  const canvas = document.getElementById('mapCanvas');
+  canvas.innerHTML = '';
+  document.getElementById('mapAreaLabel').textContent = AREA_TITLES[currentArea];
+
+  const sheetKey = AREA_SHEET_MAP[currentArea];
+  const dims = RAW_DATA.dims[sheetKey];
+  const padding = 4; // % padding around plan
+
+  // Zone labels (texto de fondo del plano real)
+  (RAW_DATA.labels[sheetKey] || []).forEach(lab => {
+    const el = document.createElement('div');
+    el.className = 'zone-label';
+    el.style.left = pct(lab.c, dims.maxcol, padding) + '%';
+    el.style.top = pct(lab.r, dims.maxrow, padding) + '%';
+    el.textContent = lab.t;
+    canvas.appendChild(el);
+  });
+
+  const patentes = patentesForArea(currentArea);
+
+  patentes.forEach(p => {
+    const s = getEstadoPatente(p.patente);
+    const status = computeStatus(s);
+    const el = document.createElement('div');
+    const match = matchesFilters(p);
+    el.className = 'patente-pin st-' + status + (match ? '' : ' dimmed');
+    el.style.left = pct(p.pos.c, dims.maxcol, padding) + '%';
+    el.style.top = pct(p.pos.r, dims.maxrow, padding) + '%';
+    el.style.minWidth = '22px';
+    el.style.height = '18px';
+    el.style.fontSize = '9px';
+    el.style.padding = '0 3px';
+    el.textContent = p.patente;
+    el.title = 'Patente ' + p.patente + ' — ' + p.sector;
+    el.addEventListener('click', () => openModal(p.patente));
+    canvas.appendChild(el);
+  });
+}
+function pct(v, max, padding){
+  const usable = 100 - padding*2;
+  return padding + (v/max) * usable;
+}
+
+/* =========================================================
+   RENDER: LISTA
+   ========================================================= */
+function renderList(){
+  const body = document.getElementById('listBody');
+  const patentes = patentesForArea(currentArea).filter(matchesFilters)
+    .sort((a,b) => Number(a.patente) - Number(b.patente));
+
+  document.getElementById('listCount').textContent = patentes.length;
+
+  if(patentes.length === 0){
+    body.innerHTML = '<div class="text-center text-[13px] text-[var(--ink-dim)] py-10 px-4">Sin resultados para este filtro.</div>';
+    return;
+  }
+
+  body.innerHTML = patentes.map(p => {
+    const s = getEstadoPatente(p.patente);
+    const status = computeStatus(s);
+    const resp = s.responsable ? esc(s.responsable) : 'Sin responsable';
+    return `
+      <div class="row-item px-4 py-3 flex items-center gap-3" data-id="${esc(p.patente)}">
+        <span class="dot dot-${status}"></span>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-baseline gap-2">
+            <span class="mono font-700 text-[13px]">#${esc(p.patente)}</span>
+            <span class="text-[12px] text-[var(--ink-dim)] truncate">${esc(p.sector)}</span>
+          </div>
+          <div class="text-[11px] text-[var(--ink-dim)] truncate mt-0.5">${esc(resp)}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  body.querySelectorAll('.row-item').forEach(row => {
+    row.addEventListener('click', () => openModal(row.dataset.id));
+  });
+}
+function esc(str){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/* =========================================================
+   RENDER: PROGRESO GLOBAL
+   ========================================================= */
+function renderProgress(){
+  const all = RAW_DATA.patentes;
+  let pend=0, parc=0, comp=0;
+  all.forEach(p => {
+    const st = computeStatus(getEstadoPatente(p.patente));
+    if(st==='pendiente') pend++;
+    else if(st==='parcial') parc++;
+    else comp++;
+  });
+  const total = all.length;
+  const pct_ = total ? Math.round((comp/total)*100) : 0;
+
+  document.getElementById('progressPct').textContent = pct_ + '%';
+  document.getElementById('cntPendiente').textContent = pend + ' pendientes';
+  document.getElementById('cntParcial').textContent = parc + ' parciales';
+  document.getElementById('cntCompletado').textContent = comp + ' completadas';
+
+  const ring = document.getElementById('ringProgress');
+  const circumference = 119.4;
+  ring.style.strokeDashoffset = circumference - (pct_/100)*circumference;
+}
+
+function renderAll(){
+  renderMap();
+  renderList();
+  renderProgress();
+}
+
+/* =========================================================
+   MODAL
+   ========================================================= */
+function openModal(patenteId){
+  const p = RAW_DATA.patentes.find(x => x.patente === String(patenteId));
+  if(!p) return;
+  activePatenteId = p.patente;
+  const s = getEstadoPatente(p.patente);
+
+  document.getElementById('modalPatente').textContent = p.patente;
+  document.getElementById('modalSector').textContent = p.sector;
+  document.getElementById('modalDetalle').textContent =
+    (p.comentario || 'Sin comentario') + (p.producto ? ' — ' + p.producto : '');
+  document.getElementById('chkFechas').checked = !!s.fechas;
+  document.getElementById('chkFlejes').checked = !!s.flejes;
+  document.getElementById('inpResponsable').value = s.responsable || '';
+
+  const meta = document.getElementById('modalMeta');
+  if(s.updatedAt){
+    const d = new Date(s.updatedAt);
+    meta.textContent = 'Última modificación: ' + d.toLocaleString('es-CL') + (s.responsable ? ' · ' + s.responsable : '');
+  } else {
+    meta.textContent = 'Sin modificaciones registradas aún.';
+  }
+
+  document.getElementById('modalBackdrop').classList.remove('hidden');
+  document.getElementById('modalBackdrop').classList.add('flex');
+}
+function closeModal(){
+  document.getElementById('modalBackdrop').classList.add('hidden');
+  document.getElementById('modalBackdrop').classList.remove('flex');
+  activePatenteId = null;
+}
+function saveModal(){
+  if(!activePatenteId) return;
+  const fechas = document.getElementById('chkFechas').checked;
+  const flejes = document.getElementById('chkFlejes').checked;
+  const responsable = document.getElementById('inpResponsable').value.trim();
+
+  STATE[activePatenteId] = {
+    fechas, flejes, responsable,
+    updatedAt: new Date().toISOString()
+  };
+  saveState(STATE);
+  closeModal();
+  renderAll();
+}
+function resetModal(){
+  if(!activePatenteId) return;
+  delete STATE[activePatenteId];
+  saveState(STATE);
+  closeModal();
+  renderAll();
+}
+
+/* =========================================================
+   EVENTOS
+   ========================================================= */
+document.querySelectorAll('[data-area]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentArea = btn.dataset.area;
+    document.querySelectorAll('[data-area]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderAll();
+  });
+});
+
+document.querySelectorAll('#statusFilters [data-status]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentStatus = btn.dataset.status;
+    document.querySelectorAll('#statusFilters [data-status]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderAll();
+  });
+});
+
+document.getElementById('searchBox').addEventListener('input', (e) => {
+  currentSearch = e.target.value;
+  renderAll();
+});
+
+document.getElementById('modalClose').addEventListener('click', closeModal);
+document.getElementById('modalBackdrop').addEventListener('click', (e) => {
+  if(e.target.id === 'modalBackdrop') closeModal();
+});
+document.getElementById('modalSave').addEventListener('click', saveModal);
+document.getElementById('modalReset').addEventListener('click', resetModal);
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape') closeModal();
+});
+
+/* =========================================================
+   INIT
+   ========================================================= */
+renderAll();
+</script>
+</body>
+</html>
